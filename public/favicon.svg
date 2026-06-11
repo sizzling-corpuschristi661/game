@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#08090a"/>
+  <!-- isometric "tabularis" cube: stacked tables -->
+  <polygon points="32,16 55.8,23 32,30 8.2,23" fill="#22d3ee"/>
+  <polygon points="8.2,23 32,30 32,48 8.2,41" fill="#3b82f6"/>
+  <polygon points="55.8,23 32,30 32,48 55.8,41" fill="#6d28d9"/>
+  <!-- layer seams -->
+  <g stroke="#ffffff" stroke-opacity="0.3" stroke-width="1" fill="none">
+    <polyline points="8.2,29 32,36 55.8,29"/>
+    <polyline points="8.2,35 32,42 55.8,35"/>
+  </g>
+</svg>
