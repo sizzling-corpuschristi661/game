@@ -8,6 +8,7 @@ import { AudioSys } from './audio.js';
 import { Input } from './input.js';
 import { Game } from './game.js';
 import { buildShareCard } from './sharecard.js';
+import { levelForCode } from './codes.js';
 import { initConsent } from './analytics.js';
 
 const TOTAL_LEVELS = 12;
@@ -46,6 +47,10 @@ const app = {
   mapIdx: 0,
   pauseIdx: 0,
   controlsFrom: 'title',
+  pinDigits: '',       // access-key entry buffer
+  pinMsg: '',
+  pinShake: 0,
+  pinBusy: false,
 
   world: 0,
   level: 0,
@@ -97,6 +102,9 @@ const app = {
     this.stateT = 0;
     shareHit = null;
     linkHit = null;
+    codeHit = null;
+    pinHits = [];
+    if (s === 'pin') { this.pinDigits = ''; this.pinMsg = ''; this.pinShake = 0; this.pinBusy = false; }
     cta.hidden = !(s === 'title' || s === 'gameover' || s === 'victory');
     // pulse the share button while a finished run is on screen
     document.body.classList.toggle('run-ended', s === 'gameover' || s === 'victory');
@@ -196,6 +204,8 @@ if (IS_TOUCH) {
 // cleared on every state change: SHARE button + an external link button
 let shareHit = null;
 let linkHit = null;
+let codeHit = null;       // "ENTER ACCESS KEY" button on the map
+let pinHits = [];         // PIN keypad button rects: { x, y, w, h, key }
 
 const hitTest = (e, rect) => {
   if (!rect) return false;
@@ -210,6 +220,13 @@ const hitTest = (e, rect) => {
 canvas.addEventListener('pointerdown', (e) => {
   if (hitTest(e, shareHit)) { e.stopPropagation(); shareScore(); return; }
   if (hitTest(e, linkHit)) { e.stopPropagation(); window.open(linkHit.url, '_blank', 'noopener'); return; }
+  if (hitTest(e, codeHit)) { e.stopPropagation(); app.audio.ensure(); app.setState('pin'); return; }
+  if (app.state === 'pin') {
+    for (const b of pinHits) {
+      if (hitTest(e, b)) { e.stopPropagation(); app.audio.ensure(); pinKey(b.key); return; }
+    }
+    return;
+  }
   if (app.state !== 'play' && app.state !== 'pause') app.input.pressed.start = true;
 });
 
@@ -308,6 +325,37 @@ function nextLevel() {
   app.level = next % 4;
   if (app.level === 0) app.setState('intro');
   else enterLevel();
+}
+
+// --------------------------------------------------------- access keys (PIN) ---
+function pinKey(k) {
+  if (app.pinBusy) return;
+  if (k === 'back') { app.pinDigits = app.pinDigits.slice(0, -1); app.pinMsg = ''; app.audio.bump(); return; }
+  if (k === 'ok') { if (app.pinDigits.length === 5) submitPin(); return; }
+  if (/^[0-9]$/.test(k) && app.pinDigits.length < 5) {
+    app.pinDigits += k;
+    app.pinMsg = '';
+    app.audio.coin();
+    if (app.pinDigits.length === 5) submitPin();
+  }
+}
+
+async function submitPin() {
+  if (app.pinBusy || app.pinDigits.length !== 5) return;
+  app.pinBusy = true;
+  const idx = await levelForCode(app.pinDigits);
+  app.pinBusy = false;
+  if (idx >= 0) {
+    app.unlocked = Math.max(app.unlocked, idx); // reveal it on the map too
+    app.save();
+    app.audio.powerup();
+    startSession(idx);                            // jump straight in
+  } else {
+    app.pinMsg = 'INVALID KEY — ROLLBACK';
+    app.pinShake = 26;
+    app.pinDigits = '';
+    app.audio.hurt();
+  }
 }
 
 // ------------------------------------------------------------------ text ---
@@ -434,6 +482,16 @@ function drawMap() {
     }
   }
 
+  // access-key button: jump straight to a level with a 5-digit key
+  {
+    const bw = 176, bh = 20, bx = (VIEW_W - bw) / 2, by = 230;
+    codeHit = { x: bx, y: by, w: bw, h: bh };
+    ctx.fillStyle = '#16181a';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = PAL.violet;
+    ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+    text('▦ ENTER ACCESS KEY', VIEW_W / 2, by + bh / 2 + 1, { size: 8, color: PAL.violet, bold: true });
+  }
   text(HINT_MAP, VIEW_W / 2, 258, { size: 7, color: PAL.muted });
 
   if (app.input.pressed.right && app.mapIdx < app.unlocked) app.mapIdx++;
@@ -677,12 +735,75 @@ function drawAbout() {
   }
 }
 
+// Phone-style PIN pad to enter a 5-digit level access key.
+function drawPin() {
+  ctx.fillStyle = PAL.bg;
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.save();
+  ctx.globalAlpha = 0.05;
+  ctx.strokeStyle = PAL.violet;
+  ctx.beginPath();
+  for (let x = 0; x < VIEW_W; x += 40) { ctx.moveTo(x, 0); ctx.lineTo(x, VIEW_H); }
+  for (let y = 0; y < VIEW_H; y += 40) { ctx.moveTo(0, y); ctx.lineTo(VIEW_W, y); }
+  ctx.stroke();
+  ctx.restore();
+
+  text('ACCESS KEY', VIEW_W / 2, 24, { size: 14, color: PAL.bright, bold: true });
+  text('tabularis> CONNECT USING KEY — jump to any level', VIEW_W / 2, 40, { size: 7, color: PAL.green });
+
+  // entry cells
+  if (app.pinShake > 0) app.pinShake--;
+  const shake = app.pinShake > 0 ? Math.sin(app.pinShake * 1.4) * 3 : 0;
+  const cells = 5, cw = 30, gap = 8;
+  const totalW = cells * cw + (cells - 1) * gap;
+  const sx = (VIEW_W - totalW) / 2;
+  for (let i = 0; i < cells; i++) {
+    const x = sx + i * (cw + gap) + shake, y = 54;
+    const filled = i < app.pinDigits.length;
+    ctx.fillStyle = '#101114';
+    ctx.fillRect(x, y, cw, 26);
+    ctx.strokeStyle = app.pinMsg ? PAL.red : filled ? PAL.cyan : PAL.border;
+    ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, 25);
+    if (filled) text(app.pinDigits[i], x + cw / 2, y + 14, { size: 14, color: PAL.cyan, bold: true });
+    else text('·', x + cw / 2, y + 14, { size: 12, color: '#374151' });
+  }
+
+  // keypad: 1-9, then ⌫ 0 OK
+  pinHits = [];
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'back', '0', 'ok'];
+  const kw = 50, kh = 30, kgap = 8, cols = 3;
+  const padW = cols * kw + (cols - 1) * kgap;
+  const px0 = (VIEW_W - padW) / 2, py0 = 92;
+  keys.forEach((k, i) => {
+    const c = i % cols, r = Math.floor(i / cols);
+    const x = px0 + c * (kw + kgap), y = py0 + r * (kh + kgap);
+    pinHits.push({ x, y, w: kw, h: kh, key: k });
+    const isOk = k === 'ok', isBack = k === 'back';
+    ctx.fillStyle = isOk ? PAL.cyan : '#16181a';
+    ctx.fillRect(x, y, kw, kh);
+    ctx.strokeStyle = isOk ? PAL.cyan : PAL.border;
+    ctx.strokeRect(x + 0.5, y + 0.5, kw - 1, kh - 1);
+    text(isOk ? 'OK' : isBack ? '⌫' : k, x + kw / 2, y + kh / 2 + 1, {
+      size: isOk ? 9 : 11, color: isOk ? '#06121a' : PAL.text, bold: isOk,
+    });
+  });
+
+  const msgY = py0 + 4 * (kh + kgap) + 2;
+  if (app.pinMsg) text(app.pinMsg, VIEW_W / 2, msgY, { size: 8, color: PAL.red, bold: true });
+  text(IS_TOUCH ? 'tap digits · OK to connect · II back'
+    : 'type 0-9 · ENTER connect · BACKSPACE delete · ESC back',
+    VIEW_W / 2, 263, { size: 7, color: '#4b5563' });
+
+  if (app.input.pressed.pause) { app.menuIdx = 1; app.setState('map'); }
+}
+
 // ------------------------------------------------------------------- loop ---
 const screens = {
   title: drawTitle,
   controls: drawControls,
   about: drawAbout,
   map: drawMap,
+  pin: drawPin,
   intro: drawIntro,
   play: drawPlay,
   pause: drawPause,
@@ -714,6 +835,14 @@ function loop(now) {
 
 addEventListener('pointerdown', () => app.audio.ensure(), { once: true });
 addEventListener('keydown', () => app.audio.ensure(), { once: true });
+
+// Number-pad typing for the access-key screen (digits aren't in the game keymap)
+addEventListener('keydown', (e) => {
+  if (app.state !== 'pin') return;
+  if (/^(Digit|Numpad)[0-9]$/.test(e.code)) { pinKey(e.key); e.preventDefault(); }
+  else if (e.code === 'Backspace') { pinKey('back'); e.preventDefault(); }
+  else if (e.code === 'Enter' || e.code === 'NumpadEnter') { pinKey('ok'); e.preventDefault(); }
+});
 
 // test hook (mirrors ?touch=1): exposes app so end-screen harnesses can
 // jump straight to gameover/victory for screenshots — no effect in normal play
