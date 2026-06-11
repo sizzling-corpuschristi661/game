@@ -45,6 +45,7 @@ const app = {
   menuIdx: 0,
   mapIdx: 0,
   pauseIdx: 0,
+  controlsFrom: 'title',
 
   world: 0,
   level: 0,
@@ -148,10 +149,33 @@ async function enterFullscreen() {
     await screen.orientation?.lock?.('landscape');
   } catch {}
 }
-document.getElementById('tb-fs')?.addEventListener('click', async () => {
+// iOS Safari (iPhone especially) ships no Fullscreen API and never will; the
+// only true fullscreen path there is launching the home-screen PWA. Detect it
+// so the button stops failing silently and we guide the user instead.
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = navigator.standalone === true ||
+  matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
+
+const fsHint = document.getElementById('fs-hint');
+let fsHintTimer = 0;
+function showFsHint() {
+  if (!fsHint) return;
+  fsHint.hidden = false;
+  clearTimeout(fsHintTimer);
+  fsHintTimer = setTimeout(() => { fsHint.hidden = true; }, 5200);
+}
+fsHint?.addEventListener('click', () => { fsHint.hidden = true; });
+
+const fsBtn = document.getElementById('tb-fs');
+// Already fullscreen as an installed PWA → the toggle is meaningless; drop it.
+if (fsBtn && isStandalone) fsBtn.hidden = true;
+fsBtn?.addEventListener('click', async () => {
   if (fsElement()) {
     const exit = document.exitFullscreen || document.webkitExitFullscreen;
     try { await exit?.call(document); } catch {}
+  } else if (!fsRequest() && isIOS && !isStandalone) {
+    showFsHint();           // no API on iOS Safari — tell them how to install
   } else enterFullscreen();
 });
 // on touch devices go fullscreen on tap — retry on every tap until it sticks
@@ -341,7 +365,7 @@ function drawTitle(t) {
     app.mapIdx = Math.min(app.unlocked, TOTAL_LEVELS - 1);
     app.setState('map');
   }]);
-  items.push(['CONTROLS', () => app.setState('controls')]);
+  items.push(['CONTROLS', () => { app.controlsFrom = 'title'; app.setState('controls'); }]);
   items.push(['ABOUT TABULARIS', () => app.setState('about')]);
   items.push([`SOUND: ${app.audio.muted ? 'OFF' : 'ON'}`, () => app.audio.toggleMute()]);
 
@@ -484,12 +508,9 @@ function drawPause() {
   const items = [
     ['RESUME', () => app.setState('play')],
     ['RESTART LEVEL', () => { app.checkpoint = null; enterLevel(); }],
-    ['EXIT TO LEVEL SELECT', () => {
-      app.mapIdx = Math.min(app.gIdx, app.unlocked);
-      app.setState('map');
-    }],
-    ['EXIT TO MAIN MENU', () => { app.menuIdx = 0; app.setState('title'); }],
+    ['COMMANDS', () => { app.controlsFrom = 'pause'; app.setState('controls'); }],
     [`SOUND: ${app.audio.muted ? 'OFF' : 'ON'}`, () => app.audio.toggleMute()],
+    ['EXIT TO MAIN MENU', () => { app.menuIdx = 0; app.setState('title'); }],
   ];
   items.forEach(([label], i) => {
     const sel = i === app.pauseIdx;
@@ -614,7 +635,7 @@ function drawControls() {
   text(IS_TOUCH ? '▲ back' : 'ENTER / ESC: back', VIEW_W / 2, 244, { size: 7, color: PAL.green });
 
   if (app.input.pressed.start || app.input.pressed.pause || app.input.pressed.jump) {
-    app.setState('title');
+    app.setState(app.controlsFrom === 'pause' ? 'pause' : 'title');
   }
 }
 
