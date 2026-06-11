@@ -136,6 +136,12 @@ exposes `__app` so the harness can jump straight to the state),
 is `chromium --headless=new --no-sandbox --hide-scrollbars
 --virtual-time-budget=N --screenshot=out.png <url>`.
 
+`test/clipgen.html` regenerates the README demo GIF (`docs/demo.gif`): the
+bot plays a few non-boss levels in ghost mode, frames are tiled into one
+montage (480×270 × 150, 10fps × 15s), screenshotted once, then sliced with
+ImageMagick and assembled by ffmpeg with a palette. Window-size must equal
+the montage (`4800x4050`); first frame is gameplay, never a menu.
+
 ## Input
 
 Keyboard (multi-action keys: ArrowUp = jump+menu-up), touch buttons, and

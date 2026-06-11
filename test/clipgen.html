@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>clipgen</title>
+<style>html,body{margin:0;padding:0;background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="montage"></canvas>
+<script type="module">
+// Records ~15s of in-game footage (the smoke bot in ghost mode playing across
+// a few levels) into a single montage sprite-sheet, screenshotted once and
+// sliced into GIF frames by the shell. First frame is gameplay, never a menu.
+import { Game } from '../js/game.js';
+import { buildSprites } from '../js/sprites.js';
+import { AudioSys } from '../js/audio.js';
+
+const FW = 480, FH = 270;        // native frame
+const FPS = 10, DUR = 15;        // 10fps × 15s
+const N = FPS * DUR;             // 150 frames
+const EVERY = 60 / FPS;          // capture every 6th 60fps step
+const COLS = 10, ROWS = Math.ceil(N / COLS); // 10×15
+
+const work = document.createElement('canvas');
+work.width = FW; work.height = FH;
+const wctx = work.getContext('2d');
+
+const montage = document.getElementById('montage');
+montage.width = COLS * FW; montage.height = ROWS * FH;
+const mctx = montage.getContext('2d');
+mctx.imageSmoothingEnabled = false;
+mctx.fillStyle = '#08090a';
+mctx.fillRect(0, 0, montage.width, montage.height);
+
+const app = {
+  input: { held: {}, pressed: {} },
+  audio: new AudioSys(),
+  sprites: buildSprites(),
+  rows: 0, score: 0, lives: 3, dead: false, cleared: false,
+  addRows(n){ this.rows += n; }, addScore(n){ this.score += n; },
+  setCheckpoint(){}, onPlayerDead(){ this.dead = true; }, onLevelClear(){ this.cleared = true; },
+};
+const game = new Game(app);
+
+// non-boss levels across all three worlds for varied footage
+const SEQ = [[0,0],[0,1],[1,0],[1,1],[2,0],[0,2]];
+let si = 0, levelFrames = 0;
+function load(idx) {
+  const [wi, li] = SEQ[idx % SEQ.length];
+  app.dead = false; app.cleared = false;
+  game.loadLevel(wi, li, null);
+  game.player.hurt = () => {};          // ghost mode (bot has no combat)
+  if (game.isBossLevel) game.bossDead = true;
+  app.input.held = { right: true };
+  levelFrames = 0;
+}
+load(0);
+
+function stepBot() {
+  const p = game.player;
+  if (game.isVertical) {
+    const fr = Math.floor((p.y + p.h + 1) / 16);
+    let best = null;
+    for (let r = fr - 1; r >= Math.max(0, fr - 4); r--) {
+      for (let c = 0; c < game.W; c++) {
+        const ch = game.tileAt(c, r);
+        if (ch !== '=' && ch !== '#') continue;
+        let c1 = c;
+        while (c1 + 1 < game.W && ['=', '#'].includes(game.tileAt(c1 + 1, r))) c1++;
+        const tgt = Math.max(c * 16 + 8, Math.min(p.x, c1 * 16 - 8));
+        const dist = Math.abs(tgt - p.x);
+        if (!best || dist < best.dist) best = { tgt, dist };
+        c = c1;
+      }
+      if (best) break;
+    }
+    const tgt = best ? best.tgt : game.flags[0][0] * 16;
+    app.input.held = { left: tgt < p.x - 3, right: tgt > p.x + 3,
+      jump: !p.onGround || Math.abs(tgt - p.x) < 24 };
+    app.input.pressed = (p.onGround && Math.abs(tgt - p.x) < 24) ? { jump: true } : {};
+    game.update();
+    return;
+  }
+  const tx = Math.floor((p.x + p.w + 5) / 16);
+  const fy = Math.floor((p.y + p.h + 2) / 16);
+  let support = false;
+  for (let dy = 0; dy < 3; dy++) {
+    if (game.solidAt(tx, fy + dy) || game.tileAt(tx, fy + dy) === '=') support = true;
+  }
+  const canJump = p.onGround || p.coyote > 0;
+  const nearEdge = !support;
+  const stuck = p.onGround && Math.abs(p.vx) < 0.2;
+  let runway = true;
+  const ptx0 = Math.floor((p.x + p.w) / 16);
+  for (let k = 1; k <= 5 && runway; k++) {
+    let s = false;
+    for (let yy = fy; yy <= 15; yy++) {
+      if (game.solidAt(ptx0 + k, yy) || game.tileAt(ptx0 + k, yy) === '=') s = true;
+    }
+    if (!s) runway = false;
+  }
+  const wantJump = nearEdge || stuck || (levelFrames % 90 === 0 && runway);
+  app.input.pressed = (wantJump && canJump) ? { jump: true } : {};
+  app.input.held.jump = wantJump || !p.onGround;
+  game.update();
+}
+
+let captured = 0, step = 0, guard = 0;
+while (captured < N && guard < N * EVERY * 4) {
+  guard++;
+  stepBot();
+  step++; levelFrames++;
+  if (app.cleared || app.dead || levelFrames > 60 * 28) load(++si);
+  if (step % EVERY === 0) {
+    game.draw(wctx);
+    const col = captured % COLS, row = Math.floor(captured / COLS);
+    mctx.drawImage(work, col * FW, row * FH);
+    captured++;
+  }
+}
+console.log('CLIP READY frames=' + captured);
+</script>
+</body>
+</html>

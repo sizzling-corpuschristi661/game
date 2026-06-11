@@ -8,6 +8,10 @@ shareable, and the whole game is database lore.
 **Zero dependencies, no build step.** Vanilla JS + Canvas, ES modules, procedural
 pixel art and procedural chiptune audio (WebAudio). The entire game is this folder.
 
+**[▶ Play it live](https://game.tabularis.dev)**
+
+![Tabularis Run — 15 seconds of gameplay](docs/demo.gif)
+
 ## Theme → mechanics
 
 | Game element | Tabularis concept |

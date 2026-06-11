@@ -347,16 +347,16 @@ function drawTitle(t) {
 
   items.forEach(([label], i) => {
     const sel = i === app.menuIdx;
-    text(`${sel ? '> ' : '  '}${label}${sel ? ' _' : ''}`, VIEW_W / 2, 166 + i * 13, {
+    text(`${sel ? '> ' : '  '}${label}${sel ? ' _' : ''}`, VIEW_W / 2, 160 + i * 12, {
       size: 9, color: sel ? PAL.green : PAL.muted, bold: sel,
     });
   });
 
   const got = app.pluginCount();
-  if (got > 0) text(`plugins salvaged: ${got}/${TOTAL_PLUGINS}`, VIEW_W / 2, 222, { size: 7, color: PAL.violet });
+  if (got > 0) text(`hidden plugins found: ${got}/${TOTAL_PLUGINS}`, VIEW_W / 2, 226, { size: 7, color: PAL.violet });
   if (app.input.gamepadActive) text('gamepad connected', VIEW_W - 8, 10, { size: 7, color: PAL.green, align: 'right' });
-  text(HINT_MOVE, VIEW_W / 2, 236, { size: 7, color: PAL.muted });
-  text(HINT_MENU, VIEW_W / 2, 248, { size: 7, color: '#4b5563' });
+  text(HINT_MOVE, VIEW_W / 2, 242, { size: 7, color: PAL.muted });
+  text(HINT_MENU, VIEW_W / 2, 254, { size: 7, color: '#4b5563' });
 
   if (app.menuIdx >= items.length) app.menuIdx = items.length - 1;
   if (app.input.pressed.down) app.menuIdx = (app.menuIdx + 1) % items.length;
