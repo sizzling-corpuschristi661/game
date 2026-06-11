@@ -3,7 +3,7 @@
 
 import { VIEW_W, VIEW_H, WORLDS, URLS, SAVE_KEY, PAL } from './constants.js';
 import { LEVELS } from './levels.js';
-import { buildSprites, drawLogoCube } from './sprites.js';
+import { buildSprites, drawLogoCube, drawLogoPixel } from './sprites.js';
 import { AudioSys } from './audio.js';
 import { Input } from './input.js';
 import { Game } from './game.js';
@@ -95,6 +95,7 @@ const app = {
     this.state = s;
     this.stateT = 0;
     shareHit = null;
+    linkHit = null;
     cta.hidden = !(s === 'title' || s === 'gameover' || s === 'victory');
     // pulse the share button while a finished run is on screen
     document.body.classList.toggle('run-ended', s === 'gameover' || s === 'victory');
@@ -167,24 +168,24 @@ if (IS_TOUCH) {
   addEventListener('pointerdown', tryFs);
 }
 
-// on-canvas SHARE button hit-rect (480×270 space), set by end screens each
-// frame and cleared on every state change
+// on-canvas clickable hotspots (480×270 space), set by screens each frame and
+// cleared on every state change: SHARE button + an external link button
 let shareHit = null;
+let linkHit = null;
+
+const hitTest = (e, rect) => {
+  if (!rect) return false;
+  const r = canvas.getBoundingClientRect();
+  const cx = (e.clientX - r.left) / r.width * VIEW_W;
+  const cy = (e.clientY - r.top) / r.height * VIEW_H;
+  return cx >= rect.x && cx <= rect.x + rect.w && cy >= rect.y && cy <= rect.y + rect.h;
+};
 
 // tapping the playfield acts as "confirm" on menu screens — unless the tap
-// lands on the on-canvas SHARE button, which generates the score card instead
+// lands on a canvas hotspot (SHARE button / external link), which acts instead
 canvas.addEventListener('pointerdown', (e) => {
-  if (shareHit) {
-    const r = canvas.getBoundingClientRect();
-    const cx = (e.clientX - r.left) / r.width * VIEW_W;
-    const cy = (e.clientY - r.top) / r.height * VIEW_H;
-    if (cx >= shareHit.x && cx <= shareHit.x + shareHit.w &&
-        cy >= shareHit.y && cy <= shareHit.y + shareHit.h) {
-      e.stopPropagation();
-      shareScore();
-      return;
-    }
-  }
+  if (hitTest(e, shareHit)) { e.stopPropagation(); shareScore(); return; }
+  if (hitTest(e, linkHit)) { e.stopPropagation(); window.open(linkHit.url, '_blank', 'noopener'); return; }
   if (app.state !== 'play' && app.state !== 'pause') app.input.pressed.start = true;
 });
 
@@ -198,6 +199,15 @@ function drawShareButton(y) {
   ctx.fillRect(x, y, w, h);
   text(saved ? 'SAVED · CAPTION COPIED' : '▦ SHARE SCORE CARD',
     VIEW_W / 2, y + h / 2 + 3, { size: 8, color: '#06121a', bold: true });
+}
+
+// Draws a filled link button centered at row y and registers it as a hotspot.
+function drawLinkButton(label, url, y, w = 180) {
+  const h = 22, x = (VIEW_W - w) / 2;
+  linkHit = { x, y, w, h, url };
+  ctx.fillStyle = PAL.cyan;
+  ctx.fillRect(x, y, w, h);
+  text(label, VIEW_W / 2, y + h / 2 + 3, { size: 8, color: '#06121a', bold: true });
 }
 
 const HINT_MOVE = IS_TOUCH ? '◀ ▶ move · ▲ jump · ✦ query · ▼ ssh tunnel' : '←→ move · SPACE jump · X query · ↓ ssh tunnel · P pause';
@@ -320,20 +330,19 @@ function drawTitle(t) {
   ctx.stroke();
   ctx.restore();
 
-  drawLogoCube(ctx, VIEW_W / 2, 70, 32, t);
+  drawLogoPixel(ctx, VIEW_W / 2, 70, 32, t);
 
   text('TABULARIS RUN', VIEW_W / 2, 116, { size: 22, color: PAL.bright, bold: true });
   text('a tiny platformer from the team behind the', VIEW_W / 2, 134, { size: 7, color: PAL.muted });
   text('open-source AI-native database client', VIEW_W / 2, 144, { size: 7, color: PAL.cyan });
 
   const items = [['NEW QUERY', () => startSession(0)]];
-  if (app.unlocked > 0) {
-    items.push([`SELECT TABLE (${app.unlocked + 1}/${TOTAL_LEVELS} unlocked)`, () => {
-      app.mapIdx = Math.min(app.unlocked, TOTAL_LEVELS - 1);
-      app.setState('map');
-    }]);
-  }
+  items.push([`SELECT TABLE (${app.unlocked + 1}/${TOTAL_LEVELS} unlocked)`, () => {
+    app.mapIdx = Math.min(app.unlocked, TOTAL_LEVELS - 1);
+    app.setState('map');
+  }]);
   items.push(['CONTROLS', () => app.setState('controls')]);
+  items.push(['ABOUT TABULARIS', () => app.setState('about')]);
   items.push([`SOUND: ${app.audio.muted ? 'OFF' : 'ON'}`, () => app.audio.toggleMute()]);
 
   items.forEach(([label], i) => {
@@ -479,6 +488,7 @@ function drawPause() {
       app.mapIdx = Math.min(app.gIdx, app.unlocked);
       app.setState('map');
     }],
+    ['EXIT TO MAIN MENU', () => { app.menuIdx = 0; app.setState('title'); }],
     [`SOUND: ${app.audio.muted ? 'OFF' : 'ON'}`, () => app.audio.toggleMute()],
   ];
   items.forEach(([label], i) => {
@@ -547,7 +557,7 @@ function drawVictory(t) {
     ctx.fillStyle = [PAL.cyan, PAL.blue, PAL.violet, PAL.green][i % 4];
     ctx.fillRect(x, y, 2, 2);
   }
-  drawLogoCube(ctx, VIEW_W / 2, 52, 22, t);
+  drawLogoPixel(ctx, VIEW_W / 2, 52, 22, t);
   text('ALL DATABASES RESTORED', VIEW_W / 2, 94, { size: 16, color: PAL.green, bold: true });
   text('0 rows corrupted. The Deadlock is no more.', VIEW_W / 2, 113, { size: 8, color: PAL.text });
   text(`SCORE ${app.score} · ROWS ${app.rows} · PLUGINS ${app.pluginCount()}/${TOTAL_PLUGINS}`, VIEW_W / 2, 136, {
@@ -608,10 +618,41 @@ function drawControls() {
   }
 }
 
+function drawAbout() {
+  ctx.fillStyle = PAL.bg;
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  drawLogoPixel(ctx, VIEW_W / 2, 34, 15, app.stateT);
+  text('ABOUT TABULARIS', VIEW_W / 2, 64, { size: 13, color: PAL.bright, bold: true });
+
+  const lines = [
+    'Tabularis is a free, open-source database client for',
+    'the AI era — one fast, native app for SQLite, MySQL,',
+    'PostgreSQL and many more.',
+    '',
+    'Browse and edit data, write SQL with autocomplete, and',
+    'let the built-in AI assistant draft queries, explain',
+    'schemas and speed up your whole workflow.',
+  ];
+  lines.forEach((l, i) =>
+    text(l, VIEW_W / 2, 86 + i * 11, { size: 7, color: i >= 4 ? PAL.text : PAL.muted }));
+  text('Tabularis Run is a love letter to it. Now go play it for real:',
+    VIEW_W / 2, 172, { size: 7, color: PAL.cyan });
+
+  drawLinkButton('▶ VISIT TABULARIS.DEV',
+    `${URLS.site}?utm_source=tabularis-run&utm_medium=about`, 188);
+  text(IS_TOUCH ? 'tap the bar to open · ▲ back' : 'click the bar to open · ENTER / ESC: back',
+    VIEW_W / 2, 224, { size: 7, color: PAL.green });
+
+  if (app.input.pressed.start || app.input.pressed.pause || app.input.pressed.jump) {
+    app.setState('title');
+  }
+}
+
 // ------------------------------------------------------------------- loop ---
 const screens = {
   title: drawTitle,
   controls: drawControls,
+  about: drawAbout,
   map: drawMap,
   intro: drawIntro,
   play: drawPlay,

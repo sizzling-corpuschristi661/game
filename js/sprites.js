@@ -604,3 +604,25 @@ export function drawLogoCube(ctx, cx, cy, size, t) {
   ctx.stroke();
   ctx.restore();
 }
+
+// Pixel-art rendition of the official Tabularis brand logo: the real "T" mark
+// downscaled to 32×32 and inlined, drawn with smoothing off so it stays crisp
+// and pixelated like the rest of the game. Falls back to the procedural cube
+// until the tiny inline image decodes.
+const LOGO_PIX_URI = 'data:image/png;base64,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';
+let logoPix = null;
+{
+  const img = new Image();
+  img.onload = () => { logoPix = img; };
+  img.src = LOGO_PIX_URI;
+}
+
+export function drawLogoPixel(ctx, cx, cy, size, t) {
+  const bob = Math.sin(t / 40) * 4;
+  if (!logoPix) { drawLogoCube(ctx, cx, cy, size, t); return; }
+  const d = Math.round(size * 1.9);
+  const prev = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(logoPix, Math.round(cx - d / 2), Math.round(cy - d / 2 + bob), d, d);
+  ctx.imageSmoothingEnabled = prev;
+}

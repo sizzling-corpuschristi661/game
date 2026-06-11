@@ -8,12 +8,16 @@
 import { buildShareCard } from '../js/sharecard.js';
 import { buildSprites } from '../js/sprites.js';
 
-const cv = buildShareCard({
-  score: 48230, rows: 312, plugins: 19, totalPlugins: 27,
-  unlocked: 9, totalLevels: 12,
-}, buildSprites());
-document.body.appendChild(cv);
-console.log('CARD READY');
+// let the inline brand-logo data URI decode first (in-game it's long loaded
+// by the time a player shares), so this preview matches real output
+setTimeout(() => {
+  const cv = buildShareCard({
+    score: 48230, rows: 312, plugins: 19, totalPlugins: 27,
+    unlocked: 9, totalLevels: 12,
+  }, buildSprites());
+  document.body.appendChild(cv);
+  console.log('CARD READY');
+}, 200);
 </script>
 </body>
 </html>

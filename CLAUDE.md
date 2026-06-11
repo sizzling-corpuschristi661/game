@@ -17,7 +17,12 @@ Live at **https://game.tabularis.dev** (own subdomain, static hosting,
 - **No external assets.** All pixel art is procedural (char-grid sprites in
   `js/sprites.js`), all audio is WebAudio chiptune (`js/audio.js`). PNGs in
   the repo (`og.png`, `icon-*.png`) are *generated* from test pages — never
-  hand-edit them, regenerate instead.
+  hand-edit them, regenerate instead. **One sanctioned exception:** the
+  official Tabularis brand logo (the isometric "T") is inlined in
+  `sprites.js` as a tiny 32×32 pixelated PNG data URI and drawn by
+  `drawLogoPixel` (smoothing off). It's the real brand mark, not gameplay
+  art; regenerate it by downscaling `logo.png` from the tabularis-website
+  repo. `drawLogoCube` (fully procedural) stays as the load-time fallback.
 - **Marketing hooks must survive every change:**
   - CTA links (tabularis.dev with `utm_source=tabularis-run`, GitHub star) on
     title / game-over / victory screens
@@ -45,7 +50,8 @@ public/           static assets copied verbatim to dist:
 .github/workflows/ci.yml  on push to main: validators + smoke bot, then
                   vite build + deploy to GitHub Pages
 js/constants.js   palette, physics tuning, URLS, WORLDS, SOLID tile set
-js/sprites.js     char-grid pixel art + procedural tiles + drawLogoCube
+js/sprites.js     char-grid pixel art + procedural tiles + drawLogoCube +
+                  drawLogoPixel (inline pixelated brand "T" logo)
 js/audio.js       sfx + per-world music loops (frame-driven sequencer)
 js/input.js       keyboard (multi-action keys) + touch buttons + gamepad polling
 js/levels.js      12 levels via grid-builder DSL + validateLevels()
@@ -66,6 +72,8 @@ test/             validators (node) + browser harnesses (chromium headless)
 - Fixed 60fps timestep with an accumulator over `requestAnimationFrame`.
 - States: `title → map (SELECT TABLE) → intro → play ⇄ pause → clear → …`,
   plus `gameover` and `victory`. Game over / victory return to the map.
+  `title` also reaches `controls` and `about` (ABOUT TABULARIS: product
+  blurb + clickable site link).
 - Save: localStorage key `tabularis-run-v1` →
   `{ v: 2, unlocked: <0..11>, stats: { "world-level": { best: frames, plugins: [bool×3] } } }`.
 - Entity activation is by camera proximity (horizontal normally, vertical in

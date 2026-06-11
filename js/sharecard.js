@@ -1,7 +1,7 @@
 // Renders a shareable 1200×630 score card. Returned as a canvas; main.js
 // turns it into a PNG for the Web Share API (or a download fallback).
 
-import { drawLogoCube } from './sprites.js';
+import { drawLogoPixel } from './sprites.js';
 
 export function buildShareCard(data, S) {
   const cv = document.createElement('canvas');
@@ -31,7 +31,7 @@ export function buildShareCard(data, S) {
   c.textBaseline = 'middle';
 
   // header
-  drawLogoCube(c, 600, 80, 42, 12);
+  drawLogoPixel(c, 600, 80, 42, 12);
   c.fillStyle = '#ffffff';
   c.font = mono(46, true);
   c.fillText('TABULARIS RUN', 600, 168);
