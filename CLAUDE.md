@@ -73,10 +73,17 @@ test/             validators (node) + browser harnesses (chromium headless)
 - Fixed 60fps timestep with an accumulator over `requestAnimationFrame`.
 - States: `title → map (SELECT TABLE) → intro → play ⇄ pause → clear → …`,
   plus `gameover` and `victory`. Game over / victory return to the map.
-  `title` also reaches `controls` and `about` (ABOUT TABULARIS: product
-  blurb + clickable site link).
+  `title` also reaches `controls`, `about` (ABOUT TABULARIS: product
+  blurb + clickable site link) and `chars` (SELECT CHARACTER).
 - Save: localStorage key `tabularis-run-v1` →
-  `{ v: 2, unlocked: <0..11>, stats: { "world-level": { best: frames, plugins: [bool×3] } } }`.
+  `{ v: 2, unlocked: <0..11>, stats: { "world-level": { best: frames, plugins: [bool×3] } }, char: <id> }`.
+- 4 selectable protagonists (`CHARACTERS` in sprites.js): TAB (default),
+  PRIMARY KEY, CURSOR, TRIGGER. Selecting repoints `sprites.player` at one
+  of `sprites.players[id]` (main.js `applyChar`), so gameplay, share card
+  and OG image all follow automatically.
+- Powers held at the flag carry into the next level: `onLevelClear`
+  snapshots them into `app.carry`, `enterLevel` applies and clears it
+  (one-shot — deaths and fresh sessions never re-grant).
 - Entity activation is by camera proximity (horizontal normally, vertical in
   climb levels).
 

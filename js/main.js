@@ -3,7 +3,7 @@
 
 import { VIEW_W, VIEW_H, WORLDS, URLS, SAVE_KEY, PAL } from './constants.js';
 import { LEVELS } from './levels.js';
-import { buildSprites, drawLogoCube, drawLogoPixel } from './sprites.js';
+import { buildSprites, drawLogoCube, drawLogoPixel, CHARACTERS } from './sprites.js';
 import { AudioSys } from './audio.js';
 import { Input } from './input.js';
 import { Game } from './game.js';
@@ -47,6 +47,8 @@ const app = {
   mapIdx: 0,
   pauseIdx: 0,
   controlsFrom: 'title',
+  charId: 'tab',       // selected protagonist (persisted)
+  charIdx: 0,          // highlight on the character-select screen
   pinDigits: '',       // access-key entry buffer
   pinMsg: '',
   pinShake: 0,
@@ -63,6 +65,7 @@ const app = {
 
   unlocked: 0,         // highest reachable global level index (0..11)
   stats: {},           // "world-level" → { best: frames, plugins: [bool×3] }
+  carry: null,         // powers held at the flag, granted at next level start
 
   get gIdx() { return this.world * 4 + this.level; },
   get key() { return `${this.world}-${this.level}`; },
@@ -81,11 +84,18 @@ const app = {
     }
   },
   addScore(n) { this.score += n; },
+
+  applyChar(id) {
+    this.charId = this.sprites.players[id] ? id : 'tab';
+    this.sprites.player = this.sprites.players[this.charId];
+  },
   setCheckpoint(tx, ty) { this.checkpoint = [tx, ty]; },
 
   onPlayerDead() { this.deathT = 0; },
 
   onLevelClear() {
+    // powers survive into the next level (consumed by enterLevel, one-shot)
+    this.carry = { mcp: game.player.hasMCP, index: game.player.hasIndex, big: game.player.big };
     const st = this.stats[this.key] || { plugins: [false, false, false] };
     const newRecord = st.best === undefined || game.frame < st.best;
     st.best = Math.min(st.best ?? 1e9, game.frame);
@@ -104,6 +114,7 @@ const app = {
     linkHit = null;
     codeHit = null;
     pinHits = [];
+    charHits = [];
     if (s === 'pin') { this.pinDigits = ''; this.pinMsg = ''; this.pinShake = 0; this.pinBusy = false; }
     cta.hidden = !(s === 'title' || s === 'gameover' || s === 'victory');
     // pulse the share button while a finished run is on screen
@@ -114,7 +125,7 @@ const app = {
   save() {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
-        v: 2, unlocked: this.unlocked, stats: this.stats,
+        v: 2, unlocked: this.unlocked, stats: this.stats, char: this.charId,
       }));
     } catch {}
   },
@@ -125,6 +136,7 @@ const app = {
       if (d.v === 2) {
         this.unlocked = d.unlocked || 0;
         this.stats = d.stats || {};
+        if (typeof d.char === 'string') this.charId = d.char;
       } else if (d.world) {
         this.unlocked = d.world * 4; // legacy format
       }
@@ -134,6 +146,7 @@ const app = {
 
 const game = new Game(app);
 app.load();
+app.applyChar(app.charId);
 
 // ------------------------------------------------------------- mobile ---
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches
@@ -206,6 +219,7 @@ let shareHit = null;
 let linkHit = null;
 let codeHit = null;       // "ENTER ACCESS KEY" button on the map
 let pinHits = [];         // PIN keypad button rects: { x, y, w, h, key }
+let charHits = [];        // character-select boxes: { x, y, w, h, idx }
 
 const hitTest = (e, rect) => {
   if (!rect) return false;
@@ -224,6 +238,12 @@ canvas.addEventListener('pointerdown', (e) => {
   if (app.state === 'pin') {
     for (const b of pinHits) {
       if (hitTest(e, b)) { e.stopPropagation(); app.audio.ensure(); pinKey(b.key); return; }
+    }
+    return;
+  }
+  if (app.state === 'chars') {
+    for (const b of charHits) {
+      if (hitTest(e, b)) { e.stopPropagation(); app.audio.ensure(); selectChar(b.idx); return; }
     }
     return;
   }
@@ -303,6 +323,7 @@ function startSession(globalIdx) {
   app.rows = 0;
   app.score = 0;
   app.checkpoint = null;
+  app.carry = null;
   app.setState('intro');
 }
 
@@ -312,6 +333,16 @@ const LEVEL_TEMPO = [1, 1.1, 0.92, 1];
 
 function enterLevel() {
   game.loadLevel(app.world, app.level, app.checkpoint);
+  if (app.carry) {
+    const p = game.player;
+    if (app.carry.big) p.grow(game);
+    p.hasIndex = !!app.carry.index;
+    p.hasMCP = !!app.carry.mcp;
+    if (app.carry.big || app.carry.index || app.carry.mcp) {
+      game.floatText(p.x + p.w / 2, p.y - 14, 'SESSION RESTORED', '#34d399');
+    }
+    app.carry = null;
+  }
   app.deathT = -1;
   app.audio.playSong(game.isBossLevel ? 4 : app.world + 1, {
     transpose: LEVEL_TRANSPOSE[app.level],
@@ -420,13 +451,17 @@ function drawTitle(t) {
     app.mapIdx = Math.min(app.unlocked, TOTAL_LEVELS - 1);
     app.setState('map');
   }]);
+  items.push([`CHARACTER: ${CHARACTERS.find(c => c.id === app.charId).name}`, () => {
+    app.charIdx = Math.max(0, CHARACTERS.findIndex(c => c.id === app.charId));
+    app.setState('chars');
+  }]);
   items.push(['CONTROLS', () => { app.controlsFrom = 'title'; app.setState('controls'); }]);
   items.push(['ABOUT TABULARIS', () => app.setState('about')]);
   items.push([`SOUND: ${app.audio.muted ? 'OFF' : 'ON'}`, () => app.audio.toggleMute()]);
 
   items.forEach(([label], i) => {
     const sel = i === app.menuIdx;
-    text(`${sel ? '> ' : '  '}${label}${sel ? ' _' : ''}`, VIEW_W / 2, 160 + i * 12, {
+    text(`${sel ? '> ' : '  '}${label}${sel ? ' _' : ''}`, VIEW_W / 2, 158 + i * 11, {
       size: 9, color: sel ? PAL.green : PAL.muted, bold: sel,
     });
   });
@@ -446,6 +481,63 @@ function drawTitle(t) {
     app.audio.ensure();
     items[app.menuIdx][1]();
   }
+}
+
+// --------------------------------------------------------- character pick ---
+const CHAR_COLORS = { tab: PAL.cyan, key: '#fde047', cursor: '#34d399', trigger: '#fb923c' };
+
+function selectChar(i) {
+  app.charIdx = i;
+  app.applyChar(CHARACTERS[i].id);
+  app.save();
+  app.audio.powerup();
+  app.menuIdx = 2; // back onto the CHARACTER row of the title menu
+  app.setState('title');
+}
+
+function drawChars(t) {
+  ctx.fillStyle = PAL.bg;
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  text('SELECT CHARACTER', VIEW_W / 2, 28, { size: 14, color: PAL.bright, bold: true });
+  text('tabularis> SET ROLE runner;', VIEW_W / 2, 46, { size: 8, color: PAL.green });
+
+  charHits = [];
+  const bw = 92, bh = 108, gap = 10;
+  const sx = (VIEW_W - (bw * 4 + gap * 3)) / 2;
+  CHARACTERS.forEach((c, i) => {
+    const x = sx + i * (bw + gap), y = 64;
+    charHits.push({ x, y, w: bw, h: bh, idx: i });
+    const sel = i === app.charIdx;
+    const accent = CHAR_COLORS[c.id];
+    ctx.fillStyle = sel ? '#16181a' : '#101114';
+    ctx.fillRect(x, y, bw, bh);
+    ctx.strokeStyle = sel ? accent : PAL.border;
+    ctx.lineWidth = sel ? 2 : 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1);
+    ctx.lineWidth = 1;
+
+    // the highlighted one does happy little Mario hops, the rest idle
+    const set = app.sprites.players[c.id];
+    const hop = sel ? Math.max(0, Math.sin(t / 9)) * 9 : 0;
+    const img = !sel ? set.idle
+      : hop > 1 ? set.jump
+      : Math.floor(t / 8) % 2 ? set.run1 : set.run2;
+    ctx.drawImage(img, x + bw / 2 - 24, y + 64 - 42 - hop, 48, 48);
+
+    text(c.name, x + bw / 2, y + 84, { size: 7, color: sel ? accent : PAL.muted, bold: sel });
+    if (c.id === app.charId) text('● ACTIVE', x + bw / 2, y + 98, { size: 6, color: PAL.green });
+  });
+
+  const cur = CHARACTERS[app.charIdx];
+  text(`"${cur.tag}"`, VIEW_W / 2, 196, { size: 9, color: CHAR_COLORS[cur.id], bold: true });
+  text(IS_TOUCH ? 'tap a character to select' : '←→ choose · ENTER select · ESC back',
+    VIEW_W / 2, 250, { size: 7, color: PAL.muted });
+
+  if (app.input.pressed.right) app.charIdx = (app.charIdx + 1) % CHARACTERS.length;
+  if (app.input.pressed.left) app.charIdx = (app.charIdx + CHARACTERS.length - 1) % CHARACTERS.length;
+  const confirm = app.input.pressed.start || (app.input.pressed.jump && !app.input.pressed.up);
+  if (confirm) { app.audio.ensure(); selectChar(app.charIdx); return; }
+  if (app.input.pressed.pause) { app.menuIdx = 2; app.setState('title'); }
 }
 
 function drawMap() {
@@ -807,6 +899,7 @@ function drawPin() {
 // ------------------------------------------------------------------- loop ---
 const screens = {
   title: drawTitle,
+  chars: drawChars,
   controls: drawControls,
   about: drawAbout,
   map: drawMap,
@@ -853,7 +946,7 @@ addEventListener('keydown', (e) => {
 
 // test hook (mirrors ?touch=1): exposes app so end-screen harnesses can
 // jump straight to gameover/victory for screenshots — no effect in normal play
-if (new URLSearchParams(location.search).has('debug')) globalThis.__app = app;
+if (new URLSearchParams(location.search).has('debug')) { globalThis.__app = app; globalThis.__game = game; }
 
 app.setState('title');
 requestAnimationFrame(loop);

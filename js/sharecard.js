@@ -78,7 +78,7 @@ export function buildShareCard(data, S) {
   const ground = 630 - G * 2;
   const put = (img, x, scale, lift = 0) =>
     c.drawImage(img, x, ground - img.height * scale - lift, img.width * scale, img.height * scale);
-  put(S.player.run1, 140, 4);
+  put(S.player.run1, 130, 5); // the chosen protagonist leads the cast
   put(S.blob[0], 300, 3);
   put(S.coin, 400, 3, 8);
   put(S.snail[0], 500, 3);

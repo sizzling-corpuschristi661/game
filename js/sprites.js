@@ -54,9 +54,61 @@ const P_FEET = {
   run2:  ['....kSSkkSSk....', '....kSSkkSSk....'],
   jump:  ['....kSSSSSSk....', '................'],
 };
-function playerFrame(feet) {
-  return render([...P_BODY, ...P_FEET[feet], '..', '..']);
+function playerFrame(body, feet) {
+  return render([...body, ...P_FEET[feet], '..', '..']);
 }
+
+// Selectable protagonists — same 12-row body skeleton as P_BODY (so all
+// four share the animated feet), each a database concept with its own face.
+const KEY_BODY = [
+  '................',
+  '..kkkkkkkkkkkk..',
+  '..kyyyyppyyyyk..',
+  '..kyyyyppyyyyk..',
+  '..kaaaaaaaaaak..',
+  '..kawwaaaawwak..',
+  '..kawpaaaapwak..',
+  '..kaaaaaaaaaak..',
+  '..kaaaappaaaak..',
+  '..kAaaaaaaaaAk..',
+  '..kAAAAAAAAAAk..',
+  '..kkkkkkkkkkkk..',
+];
+const CURSOR_BODY = [
+  '................',
+  '..kkkkkkkkkkkk..',
+  '..kpppwwwppppk..',
+  '..kggggggggggk..',
+  '..kggggggggggk..',
+  '..kgwwggggwwgk..',
+  '..kgwpggggpwgk..',
+  '..kggggggggggk..',
+  '..kggggppggggk..',
+  '..kGggggggggGk..',
+  '..kGGGGGGGGGGk..',
+  '..kkkkkkkkkkkk..',
+];
+const TRIGGER_BODY = [
+  '................',
+  '..kkkkkkkkkkkk..',
+  '..koooyyoooook..',
+  '..kooyyooooook..',
+  '..koooyooooook..',
+  '..kowwoooowwok..',
+  '..kowpoooopwok..',
+  '..kooooooooook..',
+  '..koooppppoook..',
+  '..kAooooooooAk..',
+  '..kAAAAAAAAAAk..',
+  '..kkkkkkkkkkkk..',
+];
+
+export const CHARACTERS = [
+  { id: 'tab', name: 'TAB', tag: 'the tabularis cube', body: P_BODY },
+  { id: 'key', name: 'PRIMARY KEY', tag: 'UNIQUE NOT NULL', body: KEY_BODY },
+  { id: 'cursor', name: 'CURSOR', tag: 'FETCH NEXT', body: CURSOR_BODY },
+  { id: 'trigger', name: 'TRIGGER', tag: 'ON EVENT DO RUN', body: TRIGGER_BODY },
+];
 
 // --------------------------------------------------------------- enemies ---
 const BLOB_1 = [
@@ -577,12 +629,14 @@ function tunnelBody() {
 // ----------------------------------------------------------------- build ---
 export function buildSprites() {
   const S = {
-    player: {
-      idle: playerFrame('idle'),
-      run1: playerFrame('run1'),
-      run2: playerFrame('run2'),
-      jump: playerFrame('jump'),
-    },
+    // one animated set per selectable character; `player` aliases the active
+    // one (main.js repoints it on selection) so game/sharecard need no logic
+    players: Object.fromEntries(CHARACTERS.map(c => [c.id, {
+      idle: playerFrame(c.body, 'idle'),
+      run1: playerFrame(c.body, 'run1'),
+      run2: playerFrame(c.body, 'run2'),
+      jump: playerFrame(c.body, 'jump'),
+    }])),
     blob: [render(BLOB_1), render(BLOB_2)],
     snail: [render(SNAIL_1), render(SNAIL_2)],
     wisp: [render(WISP_1), render(WISP_2)],
@@ -617,6 +671,7 @@ export function buildSprites() {
       cable: cableTile(w),
     })),
   };
+  S.player = S.players.tab;
   return S;
 }
 
