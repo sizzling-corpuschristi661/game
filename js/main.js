@@ -694,6 +694,9 @@ function loop(now) {
     acc -= STEP;
     app.stateT++;
     app.input.pollGamepad();
+    // Gamepad input fires no pointerdown/keydown, so unlock audio here too.
+    // A gamepad button press counts as user activation, so resume() works.
+    if (app.input.gamepadActive && app.input.gpPressedThisStep) app.audio.ensure();
     screens[app.state](app.stateT);
     app.audio.update();
     app.input.endFrame();

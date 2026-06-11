@@ -85,8 +85,9 @@ export class Input {
       now.left = b(14) || gp.axes[0] < -0.4;
       now.right = b(15) || gp.axes[0] > 0.4;
     }
+    this.gpPressedThisStep = false;
     for (const a of GP_ACTIONS) {
-      if (now[a] && !this.gpPrev[a]) { this.pressed[a] = true; this.held[a] = true; }
+      if (now[a] && !this.gpPrev[a]) { this.pressed[a] = true; this.held[a] = true; this.gpPressedThisStep = true; }
       else if (!now[a] && this.gpPrev[a]) this.held[a] = false;
     }
     this.gpPrev = now;
