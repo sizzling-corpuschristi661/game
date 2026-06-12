@@ -25,7 +25,10 @@ Live at **https://game.tabularis.dev** (own subdomain, static hosting,
   repo. `drawLogoCube` (fully procedural) stays as the load-time fallback.
 - **Marketing hooks must survive every change:**
   - CTA links (tabularis.dev with `utm_source=tabularis-run`, GitHub star) on
-    title / game-over / victory screens
+    title / game-over / victory screens — both the HTML `#cta` bar and the
+    on-canvas link texts (game-over/victory) are clickable hotspots
+    (`drawTextLink`/`drawLinkButton` register rects in `linkHits`, opened on
+    pointerdown; each carries its own `utm_medium`)
   - share button → 1200×630 score-card PNG (`js/sharecard.js`) via Web Share
     API, fallback download + caption to clipboard; caption links the game
     (`https://game.tabularis.dev?utm_source=share`)
@@ -76,6 +79,10 @@ test/             validators (node) + browser harnesses (chromium headless)
   plus `gameover` and `victory`. Game over / victory return to the map.
   `title` also reaches `controls`, `about` (ABOUT TABULARIS: product
   blurb + clickable site link) and `chars` (SELECT CHARACTER).
+- Level access keys (`js/codes.js`): 5-digit codes (only SHA-256 hashes
+  shipped) map to a global level index; entered via the map's PIN pad or as a
+  deep link `?code=NNNNN` (resolved on boot, jumps straight into the level and
+  reveals it on the map). `levelForCode` is the shared resolver.
 - Save: localStorage key `tabularis-run-v1` →
   `{ v: 2, unlocked: <0..11>, stats: { "world-level": { best: frames, plugins: [bool×3] } }, char: <id> }`.
 - 4 selectable protagonists (`CHARACTERS` in sprites.js): TAB (default),

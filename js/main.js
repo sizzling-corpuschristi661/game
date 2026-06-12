@@ -111,7 +111,7 @@ const app = {
     this.state = s;
     this.stateT = 0;
     shareHit = null;
-    linkHit = null;
+    linkHits = [];
     codeHit = null;
     pinHits = [];
     charHits = [];
@@ -216,7 +216,7 @@ if (IS_TOUCH) {
 // on-canvas clickable hotspots (480×270 space), set by screens each frame and
 // cleared on every state change: SHARE button + an external link button
 let shareHit = null;
-let linkHit = null;
+let linkHits = [];        // external-link hotspots (buttons + inline text links)
 let codeHit = null;       // "ENTER ACCESS KEY" button on the map
 let pinHits = [];         // PIN keypad button rects: { x, y, w, h, key }
 let charHits = [];        // character-select boxes: { x, y, w, h, idx }
@@ -233,7 +233,9 @@ const hitTest = (e, rect) => {
 // lands on a canvas hotspot (SHARE button / external link), which acts instead
 canvas.addEventListener('pointerdown', (e) => {
   if (hitTest(e, shareHit)) { e.stopPropagation(); shareScore(); return; }
-  if (hitTest(e, linkHit)) { e.stopPropagation(); window.open(linkHit.url, '_blank', 'noopener'); return; }
+  for (const l of linkHits) {
+    if (hitTest(e, l)) { e.stopPropagation(); window.open(l.url, '_blank', 'noopener'); return; }
+  }
   if (hitTest(e, codeHit)) { e.stopPropagation(); app.audio.ensure(); app.setState('pin'); return; }
   if (app.state === 'pin') {
     for (const b of pinHits) {
@@ -265,10 +267,22 @@ function drawShareButton(y) {
 // Draws a filled link button centered at row y and registers it as a hotspot.
 function drawLinkButton(label, url, y, w = 180) {
   const h = 22, x = (VIEW_W - w) / 2;
-  linkHit = { x, y, w, h, url };
+  linkHits.push({ x, y, w, h, url });
   ctx.fillStyle = PAL.cyan;
   ctx.fillRect(x, y, w, h);
   text(label, VIEW_W / 2, y + h / 2 + 3, { size: 8, color: '#06121a', bold: true });
+}
+
+// Draws an inline, underlined text link centered at (x, y) and registers a
+// hotspot sized to the rendered text (with a few px of padding for easy taps).
+function drawTextLink(str, x, y, url, { size = 8, color = PAL.cyan, bold = false } = {}) {
+  text(str, x, y, { size, color, bold });
+  ctx.font = `${bold ? 'bold ' : ''}${size}px "JetBrains Mono", monospace`;
+  const w = ctx.measureText(str).width;
+  ctx.fillStyle = color;
+  ctx.fillRect(x - w / 2, y + size / 2 + 1, w, 1); // underline
+  const pad = 6;
+  linkHits.push({ x: x - w / 2 - pad, y: y - size / 2 - pad, w: w + pad * 2, h: size + pad * 2, url });
 }
 
 const HINT_MOVE = IS_TOUCH ? '◀ ▶ move · ▲ jump · ✦ query · ▼ ssh tunnel' : '←→ move · SPACE jump · X query · ↓ ssh tunnel · P pause';
@@ -723,7 +737,15 @@ function drawGameOver(t) {
   text('FATAL', VIEW_W / 2, 80, { size: 22, color: PAL.red, bold: true });
   text('connection to server lost', VIEW_W / 2, 102, { size: 9, color: PAL.muted });
   text(`final score ${app.score} · ${app.rows} rows`, VIEW_W / 2, 126, { size: 9, color: PAL.text });
-  text('the real Tabularis never drops your connection → tabularis.dev', VIEW_W / 2, 148, { size: 7, color: PAL.cyan });
+  {
+    const a = 'the real Tabularis never drops your connection → ', b = 'tabularis.dev';
+    ctx.font = '7px "JetBrains Mono", monospace';
+    const aw = ctx.measureText(a).width, bw = ctx.measureText(b).width;
+    const startX = VIEW_W / 2 - (aw + bw) / 2;
+    text(a, startX, 148, { size: 7, color: PAL.muted, align: 'left' });
+    drawTextLink(b, startX + aw + bw / 2, 148,
+      `${URLS.site}?utm_source=tabularis-run&utm_medium=gameover`, { size: 7, color: PAL.cyan });
+  }
   if (t > 60 && Math.floor(t / 30) % 2) text('ENTER: reconnect', VIEW_W / 2, 178, { size: 9, color: PAL.green });
   drawShareButton(196);
   if (t > 60 && (app.input.pressed.start || app.input.pressed.jump)) {
@@ -751,8 +773,10 @@ function drawVictory(t) {
     text('some plugins are still out there — replay levels from SELECT TABLE', VIEW_W / 2, 152, { size: 7, color: PAL.violet });
   }
   text('You beat the game. Now try the real thing:', VIEW_W / 2, 176, { size: 8, color: PAL.muted });
-  text('Tabularis — open-source database client for the AI era', VIEW_W / 2, 190, { size: 8, color: PAL.cyan });
-  text('github.com/TabularisDB/tabularis ★', VIEW_W / 2, 204, { size: 8, color: PAL.amber });
+  drawTextLink('Tabularis — open-source database client for the AI era', VIEW_W / 2, 190,
+    `${URLS.site}?utm_source=tabularis-run&utm_medium=victory`, { size: 8, color: PAL.cyan });
+  drawTextLink('github.com/TabularisDB/tabularis ★', VIEW_W / 2, 204,
+    URLS.github, { size: 8, color: PAL.amber });
   if (t > 90 && Math.floor(t / 30) % 2) text('ENTER: level select', VIEW_W / 2, 232, { size: 8, color: PAL.green });
   if (t > 90 && (app.input.pressed.start || app.input.pressed.jump)) {
     app.mapIdx = 0;
@@ -950,6 +974,19 @@ if (new URLSearchParams(location.search).has('debug')) { globalThis.__app = app;
 
 app.setState('title');
 requestAnimationFrame(loop);
+
+// ?code=XXXXX jumps straight into the matching level — same 5-digit keys as the
+// PIN pad, for shareable deep links / bookmarks. The title shows for a frame
+// while the hash resolves; an invalid or unknown code just stays on the title.
+const urlCode = new URLSearchParams(location.search).get('code');
+if (urlCode && /^\d{5}$/.test(urlCode)) {
+  levelForCode(urlCode).then((idx) => {
+    if (idx < 0) return;
+    app.unlocked = Math.max(app.unlocked, idx); // reveal it on the map too
+    app.save();
+    startSession(idx);
+  });
+}
 
 // ask for analytics consent (no-op unless a Matomo tracker is configured)
 initConsent();
